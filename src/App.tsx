@@ -3,8 +3,36 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
+import { 
+  LayoutDashboard, 
+  PlusCircle, 
+  ListOrdered, 
+  Calendar as CalendarIcon, 
+  LogOut, 
+  RefreshCcw, 
+  FileSpreadsheet, 
+  Download, 
+  Upload, 
+  ChevronLeft, 
+  ChevronRight, 
+  Search, 
+  MapPin, 
+  Tag, 
+  User, 
+  Phone, 
+  Info,
+  CheckCircle2,
+  Clock,
+  Trash2,
+  Edit2,
+  ExternalLink,
+  PieChart,
+  BarChart3,
+  HelpCircle
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 // ── KONSTANTA ─────────────────────────────────────────────────
 const KABUPATEN_KOTA = [
@@ -24,9 +52,31 @@ const KATEGORI = [
 
 const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
 
+const HOLIDAYS_2026: Record<string, string> = {
+  "2026-01-01": "Tahun Baru 2026 Masehi",
+  "2026-01-16": "Isra Mi'raj Nabi Muhammad SAW",
+  "2026-02-17": "Tahun Baru Imlek 2577 Kongzili",
+  "2026-03-19": "Hari Suci Nyepi (Tahun Baru Saka 1948)",
+  "2026-03-20": "Hari Raya Idul Fitri 1447 H",
+  "2026-03-21": "Hari Raya Idul Fitri 1447 H",
+  "2026-03-23": "Cuti Bersama Idul Fitri",
+  "2026-03-24": "Cuti Bersama Idul Fitri",
+  "2026-04-03": "Wafat Yesus Kristus",
+  "2026-05-01": "Hari Buruh Internasional",
+  "2026-05-11": "Kenaikan Yesus Kristus",
+  "2026-05-22": "Hari Raya Waisak 2570 BE",
+  "2026-05-27": "Hari Raya Idul Adha 1447 H",
+  "2026-06-01": "Hari Lahir Pancasila",
+  "2026-06-16": "Tahun Baru Islam 1448 H",
+  "2026-08-17": "Hari Kemerdekaan RI",
+  "2026-08-25": "Maulid Nabi Muhammad SAW",
+  "2026-12-25": "Hari Raya Natal",
+  "2026-12-26": "Cuti Bersama Natal",
+};
+
 const STATUS_BADGE: Record<string, { bg: string; color: string; border: string }> = {
-  "Draft":    { bg:"#1A1A2A", color:"#8A8AA0", border:"#2A2A4A" },
-  "Diajukan": { bg:"#0A2218", color:"#4CAF82", border:"#0E4028" },
+  "Draft":    { bg:"rgba(71, 85, 105, 0.2)", color:"#94A3B8", border:"rgba(148, 163, 184, 0.2)" },
+  "Diajukan": { bg:"rgba(16, 185, 129, 0.15)", color:"#10B981", border:"rgba(16, 185, 129, 0.3)" },
 };
 
 const ACCOUNTS = [
@@ -66,25 +116,26 @@ const initialForm: Omit<EventData, 'id'> = {
 
 const STORAGE_KEY  = "coe_sumbar_v2_events";
 const SESSION_KEY  = "coe_sumbar_session";
-const SHEET_URL    = "https://script.google.com/macros/s/AKfycbyDuXGIgl1nOXJpviThfrrn4ThbH62USbq6GUDfBecl5wx4oRJhk5gnIlBF8D_q1QLffg/exec";
 
-// ── GOOGLE API HELPERS ─────────────────────────────────
+// ── API HELPERS (Proxy through Server) ───────────────────────────────
 async function sheetSaveEvent(event: EventData) {
   try {
-    await fetch(SHEET_URL, {
+    const res = await fetch("/api/events", {
       method: "POST",
-      mode: "no-cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "save", event }),
     });
-  } catch(e) { console.warn("Sheet save failed:", e); }
+    return res.ok;
+  } catch(e) { 
+    console.warn("Sheet save failed:", e); 
+    return false;
+  }
 }
 
 async function sheetDeleteEvent(id: number) {
   try {
-    await fetch(SHEET_URL, {
+    await fetch("/api/events", {
       method: "POST",
-      mode: "no-cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
@@ -93,7 +144,7 @@ async function sheetDeleteEvent(id: number) {
 
 async function sheetGetAll(): Promise<EventData[] | null> {
   try {
-    const res = await fetch(SHEET_URL + "?action=getAll");
+    const res = await fetch("/api/events");
     const data = await res.json();
     return data.events || null;
   } catch(e) { console.warn("Sheet getAll failed:", e); return null; }
@@ -111,11 +162,6 @@ function getSeedData(): EventData[] {
       lokasi:"Danau Singkarak & sekitarnya", deskripsi:"Balap sepeda internasional mengelilingi alam Sumatera Barat.",
       targetWisatawan:"20000", kontakNama:"Roni Amir", kontakHP:"082345678901",
       kontakEmail:"pariwisata@solok.go.id", anggaran:"2000000000", status:"Diajukan", createdAt:"2025-02-01" },
-    { id:3, namaEvent:"Festival Rendang Dunia", kabupatenKota:"Kota Padang",
-      kategori:"Kuliner", tanggalMulai:"2025-09-20", tanggalSelesai:"2025-09-22",
-      lokasi:"GOR H. Agus Salim, Padang", deskripsi:"Festival kuliner rendang sebagai warisan budaya UNESCO.",
-      targetWisatawan:"10000", kontakNama:"Sari Dewi", kontakHP:"083456789012",
-      kontakEmail:"pariwisata@padang.go.id", anggaran:"750000000", status:"Draft", createdAt:"2025-03-15" },
   ];
 }
 
@@ -133,31 +179,7 @@ function exportToExcel(events: EventData[]) {
   ws["!cols"]=[{wch:5},{wch:35},{wch:25},{wch:20},{wch:14},{wch:14},{wch:30},{wch:40},{wch:18},{wch:22},{wch:20},{wch:16},{wch:28},{wch:12},{wch:14}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Calendar of Events");
-  const kc: Record<string, number>={},kab: Record<string, number>={};
-  events.forEach(e=>{kc[e.kategori]=(kc[e.kategori]||0)+1;kab[e.kabupatenKota]=(kab[e.kabupatenKota]||0)+1;});
-  const s2=[
-    {"Ringkasan":"Total Event","Jumlah":events.length},
-    {"Ringkasan":"Sudah Diajukan","Jumlah":events.filter(e=>e.status==="Diajukan").length},
-    {"Ringkasan":"Masih Draft","Jumlah":events.filter(e=>e.status==="Draft").length},
-    {"Ringkasan":"Total Target Wisatawan","Jumlah":events.reduce((s,e)=>s+parseInt(e.targetWisatawan||"0"),0)},
-    {"Ringkasan":"","Jumlah":""},
-    {"Ringkasan":"— Per Kategori —","Jumlah":""},
-    ...Object.entries(kc).map(([k,v])=>({Ringkasan:k,Jumlah:v})),
-    {"Ringkasan":"","Jumlah":""},
-    {"Ringkasan":"— Per Kab/Kota —","Jumlah":""},
-    ...Object.entries(kab).map(([k,v])=>({Ringkasan:k,Jumlah:v})),
-  ];
-  const ws2=XLSX.utils.json_to_sheet(s2); ws2["!cols"]=[{wch:30},{wch:15}];
-  XLSX.utils.book_append_sheet(wb,ws2,"Ringkasan");
   XLSX.writeFile(wb,`CoE_SumBar_${new Date().toISOString().split("T")[0]}.xlsx`);
-}
-
-function exportToJSON(events: EventData[]) {
-  const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),total:events.length,events},null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a"); a.href=url;
-  a.download=`CoE_SumBar_Backup_${new Date().toISOString().split("T")[0]}.json`;
-  a.click(); URL.revokeObjectURL(url);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -184,7 +206,6 @@ function LoginScreen({ onLogin }: { onLogin: (u: any) => void }) {
   const [pass,  setPass]  = useState("");
   const [err,   setErr]   = useState("");
   const [show,  setShow]  = useState(false);
-  const [hint,  setHint]  = useState(false);
 
   const doLogin = () => {
     const acc = ACCOUNTS.find(a=>a.username===uname.trim()&&a.password===pass);
@@ -193,73 +214,83 @@ function LoginScreen({ onLogin }: { onLogin: (u: any) => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0D1B0F] flex items-center justify-center relative overflow-hidden" 
-         style={{ backgroundImage: `radial-gradient(ellipse at 30% 40%,rgba(196,160,60,.09) 0%,transparent 55%), radial-gradient(ellipse at 75% 70%,rgba(34,85,34,.18) 0%,transparent 50%)` }}>
-      <div className="w-[380px] bg-[rgba(8,20,10,0.97)] border border-[rgba(196,160,60,0.2)] rounded-2xl p-10 shadow-[0_24px_60px_rgba(0,0,0,0.6)] z-10">
-
-        <div className="text-center mb-8">
-          <div className="text-4xl mb-2">🏔</div>
-          <div className="text-[9px] tracking-[3px] text-[#C4A03C] uppercase mb-1">Dinas Pariwisata</div>
-          <div className="text-xl font-bold text-[#E8DCC8]">Sumatera Barat</div>
-          <div className="text-[10px] text-[#6A5830] mt-1 tracking-[1px]">Calendar of Events · Sistem Pendataan</div>
+    <div className="min-h-screen bg-[#f8efe3] flex items-center justify-center p-4 relative overflow-hidden" 
+         style={{ backgroundImage: `radial-gradient(circle at 10% 20%, rgba(184, 134, 11, 0.05) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(5, 150, 105, 0.05) 0%, transparent 40%)` }}>
+      
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-[420px] bg-white border border-slate-200 rounded-3xl p-10 shadow-[0_32px_80px_rgba(0,0,0,0.1)] relative z-10 overflow-hidden"
+      >
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent" />
+        
+        <div className="text-center mb-10">
+          <motion.div 
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-amber-100 shadow-sm"
+          >
+            <MapPin className="text-[#B8860B] w-10 h-10" />
+          </motion.div>
+          <div className="text-[10px] tracking-[4px] text-amber-700 uppercase mb-1 font-bold">Dinas Pariwisata</div>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Sumatera Barat</h1>
+          <div className="text-[11px] text-slate-400 mt-2 font-medium">Sistem Pendataan Calendar of Events</div>
         </div>
 
-        <div className="mb-4">
-          <label className="text-[11px] text-[#6A5830] block mb-1.5 font-sans">Username</label>
-          <input value={uname} onChange={e=>{setUname(e.target.value);setErr("");}}
-            onKeyDown={e=>e.key==="Enter"&&doLogin()}
-            placeholder="admin.provinsi / admin.kota.padang"
-            className="w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(196,160,60,0.16)] text-[#E8DCC8] p-[9px_12px] rounded-lg outline-none text-sm" />
-        </div>
+        <div className="space-y-4">
+          <div className="mt-8 pt-8 border-t border-slate-100">
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-[2px] mb-6 text-center opacity-70">Pilih Akun Akses Cepat</div>
+            
+            <div className="space-y-4 max-h-[400px] overflow-y-auto px-1 custom-scroll">
+              {/* Provinsi */}
+              <div>
+                <div className="text-[9px] text-amber-600 mb-2 uppercase tracking-widest font-bold">Provinsi</div>
+                <QuickLoginBtn 
+                  label="Admin Provinsi" 
+                  onClick={() => { setUname("admin.provinsi"); setPass("sumbarrancak"); setTimeout(doLogin, 100); }} 
+                  isProv
+                />
+              </div>
 
-        <div className="mb-2">
-          <label className="text-[11px] text-[#6A5830] block mb-1.5 font-sans">Password</label>
-          <div className="relative">
-            <input value={pass} onChange={e=>{setPass(e.target.value);setErr("");}}
-              onKeyDown={e=>e.key==="Enter"&&doLogin()}
-              type={show?"text":"password"} placeholder="••••••••"
-              className="w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(196,160,60,0.16)] text-[#E8DCC8] p-[9px_40px_9px_12px] rounded-lg outline-none text-sm" />
-            <button onClick={()=>setShow(s=>!s)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-[#6A5830] cursor-pointer text-sm p-0">
-              {show?"🙈":"👁"}
-            </button>
+              {/* Kab/Kota */}
+              <div>
+                <div className="text-[9px] text-emerald-600 mb-2 uppercase tracking-widest font-bold">Kabupaten / Kota</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {ACCOUNTS.filter(a => a.role === "kabkota").map(a => (
+                    <QuickLoginBtn 
+                      key={a.username}
+                      label={a.kabupatenKota || a.nama} 
+                      onClick={() => { setUname(a.username); setPass(a.password); setTimeout(doLogin, 100); }} 
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {err && <div className="text-[11px] text-red-400 mb-2.5 p-[6px_10px] bg-[rgba(224,90,90,0.08)] rounded-md">{err}</div>}
-
-        <button onClick={doLogin} className="w-full p-[11px] bg-gradient-to-br from-[#C4A03C] to-[#A07828] text-[#0D1B0F] border-none rounded-lg text-sm font-bold cursor-pointer mt-2 tracking-wide hover:opacity-90 transition-opacity">
-          Masuk
-        </button>
-
-        <div className="mt-5 text-center">
-          <button onClick={()=>setHint(h=>!h)}
-            className="text-[10px] text-[#4A3820] bg-transparent border-none cursor-pointer underline">
-            {hint?"Sembunyikan":"Lihat semua akun demo"}
-          </button>
-          {hint&&(
-            <div className="mt-2.5 bg-[rgba(255,255,255,0.02)] border border-[rgba(196,160,60,0.1)] rounded-lg p-3 text-left max-h-[260px] overflow-y-auto">
-              <div className="text-[10px] text-[#6A5830] mb-1 font-bold">ADMIN PROVINSI</div>
-              <div className="text-[10px] text-[#8A7860] font-mono mb-2.5 bg-[rgba(196,160,60,0.06)] p-[4px_8px] rounded cursor-pointer"
-                onClick={()=>{setUname("admin.provinsi");setPass("sumbarrancak");setHint(false);}}>
-                admin.provinsi &nbsp;·&nbsp; sumbarrancak
-              </div>
-              <div className="text-[10px] text-[#6A5830] mb-1 font-bold">
-                ADMIN KAB/KOTA <span className="text-[#3A3020] font-normal">(password: sumbarrancak)</span>
-              </div>
-              {ACCOUNTS.filter(a=>a.role==="kabkota").map(a=>(
-                <div key={a.username}
-                  className="text-[10px] text-[#8A7860] font-mono p-[3px_8px] rounded mb-0.5 bg-[rgba(255,255,255,0.02)] cursor-pointer hover:bg-[rgba(196,160,60,0.05)]"
-                  onClick={()=>{setUname(a.username);setPass("sumbarrancak");setHint(false);}}>
-                  {a.username}
-                </div>
-              ))}
-              <div className="text-[9px] text-[#3A3020] mt-2 italic">✱ klik username untuk mengisi otomatis</div>
-            </div>
-          )}
-        </div>
+        {err && <div className="mt-4 text-[11px] text-red-600 bg-red-50 p-3 rounded-xl border border-red-100 font-semibold">{err}</div>}
+      </motion.div>
+      <div className="absolute bottom-8 left-0 w-full text-center">
+        <span className="text-[10px] text-slate-300 font-bold uppercase tracking-[4px]">Design by Minangkaos</span>
       </div>
     </div>
+  );
+}
+
+function QuickLoginBtn({ label, onClick, isProv }: { label: string; onClick: () => void; isProv?: boolean }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`w-full text-left p-3 rounded-xl border transition-all text-[11px] font-bold flex items-center gap-2 group
+        ${isProv 
+          ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 hover:shadow-sm" 
+          : "bg-slate-50 border-slate-100 text-slate-500 hover:border-emerald-200 hover:text-emerald-700 hover:bg-emerald-50 hover:shadow-sm"
+        }`}
+    >
+      <div className={`w-1.5 h-1.5 rounded-full ${isProv ? "bg-amber-500 shadow-[0_0_8px_rgba(184,134,11,0.5)]" : "bg-emerald-400 opacity-40 group-hover:opacity-100"}`} />
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 
@@ -277,151 +308,158 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
   const [filterKab, setFilterKab]         = useState("");
   const [filterKat, setFilterKat]         = useState("");
   const [filterStatus, setFilterStatus]   = useState("");
-  const [filterBulan, setFilterBulan]     = useState("");
+  const [groupBy, setGroupBy]             = useState("kabupatenKota");
   const [searchQ, setSearchQ]             = useState("");
-  const [calYear,  setCalYear]            = useState(2025);
+  const [calYear,  setCalYear]            = useState(2026);
   const [calMonth, setCalMonth]           = useState(new Date().getMonth());
   const [toast,   setToast]               = useState<{ msg: string; type: string }|null>(null);
   const [delConfirm, setDelConfirm]       = useState<number | null>(null);
   const [ajukanConfirm, setAjukanConfirm] = useState<number | null>(null);
-  const [importConfirm, setImportConfirm] = useState<{events: EventData[]; count: number} | null>(null);
-  const [aiLoading, setAiLoading]         = useState(false);
-  const [aiResult,  setAiResult]          = useState<string | null>(null);
-  const importRef = useRef<HTMLInputElement>(null);
+  const [sheetLoading, setSheetLoading]   = useState(true);
+  const [lastSync, setLastSync]           = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [sheetLoading, setSheetLoading] = useState(true);
-
-  useEffect(()=>{
-    setSheetLoading(true);
-    sheetGetAll().then(sheetEvents => {
-      if (sheetEvents && sheetEvents.length > 0) {
-        setEvents(sheetEvents);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sheetEvents));
-      } else {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        setEvents(stored ? JSON.parse(stored) : getSeedData());
-      }
-      setSheetLoading(false);
-    });
-  },[]);
-
-  useEffect(()=>{ if(events.length>0) localStorage.setItem(STORAGE_KEY,JSON.stringify(events)); },[events]);
-
-  const showToast=(msg: string,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
-
-  const handleRefresh = () => {
-    setSheetLoading(true);
-    sheetGetAll().then(sheetEvents => {
-      if (sheetEvents && sheetEvents.length > 0) {
-        setEvents(sheetEvents);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sheetEvents));
-        showToast(`Data diperbarui dari server. ✓`);
-      } else {
-        showToast("Tidak ada data baru dari server.", "info");
-      }
-      setSheetLoading(false);
-    });
+  const exportToJSON = () => {
+    const blob = new Blob([JSON.stringify(events, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Backup_CoE_SumBar_${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Data dieksport ke JSON. ✓");
   };
 
-  const canEditEvent  = (e: EventData) => isProvinsi || e.kabupatenKota === user.kabupatenKota;
+  const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const jsonData = JSON.parse(event.target?.result as string);
+        if (!Array.isArray(jsonData)) throw new Error("Format file tidak valid.");
+        if (window.confirm(`${jsonData.length} event ditemukan. Lanjutkan restorasi?`)) {
+          setEvents(jsonData);
+          jsonData.forEach((ev: any) => sheetSaveEvent(ev));
+          showToast("Restorasi data berhasil! ✓");
+        }
+      } catch (err) { alert("Gagal mengimpor: format file tidak sesuai."); }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  };
 
-  const handleSubmit = () => {
-    const finalForm = !isProvinsi
-      ? { ...form, kabupatenKota: user.kabupatenKota }
-      : { ...form };
-
-    if (!finalForm.namaEvent || !finalForm.kabupatenKota || !finalForm.tanggalMulai || !finalForm.kategori) {
-      const kosong = [];
-      if (!finalForm.namaEvent) kosong.push("Nama Event");
-      if (!finalForm.kabupatenKota) kosong.push("Kabupaten/Kota");
-      if (!finalForm.tanggalMulai) kosong.push("Tanggal Mulai");
-      if (!finalForm.kategori) kosong.push("Kategori");
-      showToast("Field wajib belum diisi: " + kosong.join(", "), "error"); return;
+  const fetchUpdatedData = async (silent = false) => {
+    if (!silent) setSheetLoading(true);
+    const sheetEvents = await sheetGetAll();
+    if (sheetEvents && Array.isArray(sheetEvents)) {
+      const cleaned = sheetEvents.filter(e => e.namaEvent && e.namaEvent.toString().trim() !== "");
+      setEvents(cleaned);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      setLastSync(new Date().toLocaleTimeString());
     }
+    if (!silent) setSheetLoading(false);
+  };
+
+  useEffect(()=>{
+    fetchUpdatedData();
+    const interval = setInterval(() => fetchUpdatedData(true), 10000);
+    return () => clearInterval(interval);
+  },[]);
+
+  const showToast=(msg: string,type="success")=>{ 
+    setToast({msg,type}); 
+    setTimeout(()=>setToast(null),4000); 
+  };
+
+  const filtered = useMemo(() => {
+    return (events || []).filter(e => {
+      if (!e) return false;
+      const q = (searchQ || "").toLowerCase();
+      const matchSearch = (e.namaEvent || "").toLowerCase().includes(q) || (e.lokasi || "").toLowerCase().includes(q);
+      const matchKab = !filterKab || e.kabupatenKota === filterKab;
+      const matchKat = !filterKat || e.kategori === filterKat;
+      const matchStatus = !filterStatus || e.status === filterStatus;
+      return matchSearch && matchKab && matchKat && matchStatus;
+    });
+  }, [events, searchQ, filterKab, filterKat, filterStatus]);
+
+  const stats = useMemo(() => {
+    const totalTarget = events.reduce((s, e) => s + parseInt(e.targetWisatawan || "0"), 0);
+    const kabCounts = KABUPATEN_KOTA.map(k => ({ 
+      name: k, 
+      count: events.filter(e => e.kabupatenKota === k).length 
+    })).filter(k => k.count > 0).sort((a,b) => b.count - a.count);
+
+    return {
+      total: events.length,
+      diajukan: events.filter(e => e.status === "Diajukan").length,
+      target: totalTarget,
+      kabCounts
+    };
+  }, [events]);
+
+  const handleSubmit = async () => {
+    const finalForm = !isProvinsi ? { ...form, kabupatenKota: user.kabupatenKota } : { ...form };
+
+    if (!finalForm.namaEvent || !finalForm.kabupatenKota || !finalForm.tanggalMulai) {
+      showToast("Lengkapi data wajib (Nama, Wilayah, Tanggal)!", "error"); return;
+    }
+
+    setSheetLoading(true);
     if (editId) {
-      const updated = {...finalForm, id:editId, createdAt: events.find(e=>e.id===editId)?.createdAt} as EventData;
-      setEvents(ev=>ev.map(e=>e.id===editId?updated:e));
-      sheetSaveEvent(updated);
-      showToast("Event berhasil diperbarui! ✓");
+      const updated = {...finalForm, id:editId} as EventData;
+      const success = await sheetSaveEvent(updated);
+      if (success) {
+        setEvents(ev=>ev.map(e=>e.id===editId?updated:e));
+        showToast("Event diperbarui. ✓");
+        setView("list"); setForm(initialForm); setEditId(null);
+      } else {
+        showToast("Gagal menyimpan ke Google Sheets.", "error");
+      }
     } else {
-      const newEvent = {...finalForm, id:Date.now(), createdAt:new Date().toISOString().split("T")[0]} as EventData;
-      setEvents(ev=>[...ev, newEvent]);
-      sheetSaveEvent(newEvent);
-      showToast("Event berhasil ditambahkan & disimpan ke server! ✓");
+      const newEvent = {...finalForm, id:Date.now(), createdAt:new Date().toISOString()} as EventData;
+      const success = await sheetSaveEvent(newEvent);
+      if (success) {
+        setEvents(ev=>[...ev, newEvent]);
+        showToast("Event ditambahkan. ✓");
+        setView("list"); setForm(initialForm); setEditId(null);
+      } else {
+        showToast("Gagal menyimpan ke Google Sheets.", "error");
+      }
     }
-    setForm(initialForm); setEditId(null); setView("list");
+    setSheetLoading(false);
   };
 
   const handleEdit = (e: EventData) => {
-    if (!canEditEvent(e)) return;
     setForm({...e}); setEditId(e.id); setView("form");
   };
 
-  const handleDelete = (id: number) => {
-    setEvents(ev=>ev.filter(e=>e.id!==id));
-    sheetDeleteEvent(id);
-    setDelConfirm(null); showToast("Event berhasil dihapus.","info");
-    if (view==="detail") setView("list");
-  };
-
-  const handleAjukan = (id: number) => {
-    setEvents(ev=>ev.map(e=>{
-      if(e.id===id){ const updated={...e,status:"Diajukan"}; sheetSaveEvent(updated); return updated; }
-      return e;
-    }));
-    if (selEvent?.id===id) setSelEvent(s=>s ? ({...s,status:"Diajukan"}) : null);
-    setAjukanConfirm(null);
-    showToast("Event berhasil diajukan ke Dinas Provinsi! ✓");
-  };
-
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file=e.target.files?.[0]; if(!file) return;
-    const reader=new FileReader();
-    reader.onload=(ev)=>{
-      try {
-        const parsed=JSON.parse(ev.target?.result as string);
-        const imported=parsed.events||(Array.isArray(parsed)?parsed:null);
-        if(!imported||!imported.length){ showToast("File tidak valid atau kosong.","error"); return; }
-        setImportConfirm({events:imported,count:imported.length});
-      } catch { showToast("Gagal membaca file JSON.","error"); }
-    };
-    reader.readAsText(file); 
-    e.target.value="";
-  };
-
-  const confirmImport = (mode: string) => {
-    if(!importConfirm) return;
-    if(mode==="replace"){
-      setEvents(importConfirm.events);
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(importConfirm.events));
-      showToast(`${importConfirm.count} event berhasil di-restore.`);
-    } else {
-      const merged=[...events,...importConfirm.events.filter(ie=>!events.find(e=>e.id===ie.id))];
-      setEvents(merged); localStorage.setItem(STORAGE_KEY,JSON.stringify(merged));
-      showToast(`${importConfirm.count} event berhasil digabungkan.`);
-    }
-    setImportConfirm(null);
-  };
-
-  const generateAI = async()=>{
-    setAiLoading(true); setAiResult(null);
+  const handleDelete = async (id: any) => {
+    if (!id) return;
     try {
-      setAiResult(`Analisis CoE Sumbar (AI):
-1. Distribusi Event: Terkonsentrasi pada Festival Budaya (40%) dan Kuliner (25%).
-2. Potensi Wisatawan: Mencapai ${totalTarget.toLocaleString("id-ID")} orang dengan event utama di Kota Padang dan Pariaman.
-3. Rekomendasi: Perlu penguatan pada kategori MICE di daerah pegunungan.`);
-    } catch { setAiResult("Terjadi kesalahan saat menghubungi AI."); }
-    setAiLoading(false);
+      setEvents(ev=>ev.filter(e=>String(e.id)!==String(id)));
+      await sheetDeleteEvent(Number(id));
+      setDelConfirm(null); 
+      showToast("Event berhasil dihapus. ✓");
+      if (view==="detail") setView("list");
+    } catch (err) {
+      showToast("Gagal menghapus event.", "error");
+    }
   };
 
-  const filtered = events.filter(e=>{
-    const q=searchQ.toLowerCase();
-    return (!q||e.namaEvent.toLowerCase().includes(q)||e.lokasi?.toLowerCase().includes(q))
-      &&(!filterKab||e.kabupatenKota===filterKab)
-      &&(!filterKat||e.kategori===filterKat)
-      &&(!filterStatus||e.status===filterStatus)
-      &&(!filterBulan||(e.tanggalMulai&&new Date(e.tanggalMulai).getMonth()===parseInt(filterBulan)));
-  });
+  const handleAjukan = async (id: any) => {
+    const event = events.find(e => String(e.id) === String(id));
+    if (!event) return;
+    const updated = {...event, status: "Diajukan"};
+    setEvents(ev=>ev.map(e=>String(e.id)===String(id)?updated:e));
+    await sheetSaveEvent(updated);
+    if (selEvent && String(selEvent.id) === String(id)) setSelEvent(updated);
+    setAjukanConfirm(null);
+    showToast("Event berhasil diajukan ke Provinsi! ✓");
+  };
+
+  const canEdit = (e: EventData) => isProvinsi || (e.kabupatenKota === user.kabupatenKota && e.status === "Draft");
 
   const getDIM=(y: number,m: number)=>new Date(y,m+1,0).getDate();
   const getFD =(y: number,m: number)=>new Date(y,m,1).getDay();
@@ -431,212 +469,527 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
     const d=new Date(calYear,calMonth,day); return d>=s&&d<=en;
   });
 
-  const totalEvt   = events.length;
-  const totalTarget= events.reduce((s,e)=>s+parseInt(e.targetWisatawan||"0"),0);
-  const diajukan   = events.filter(e=>e.status==="Diajukan").length;
-
-  const navItems=[
-    {key:"dashboard",label:"Dashboard",   icon:"◈"},
-    {key:"form",     label:"Tambah Event",icon:"✦"},
-    {key:"list",     label:"Daftar Event",icon:"≡"},
-    {key:"calendar", label:"Kalender",    icon:"⊞"},
-  ];
-  
-  const viewLabel: Record<string, string> = {
-    dashboard:"Dashboard Ikhtisar",
-    form:editId?"Edit Event":"Tambah Event Baru",
-    list:"Daftar Seluruh Event",
-    calendar:"Tampilan Kalender",
-    detail:"Detail Event"
-  };
-
   return (
-    <div className="min-h-screen bg-[#0D1B0F] text-[#E8DCC8] relative font-serif">
-      <div className="fixed inset-0 z-0 pointer-events-none"
-        style={{ backgroundImage: `radial-gradient(ellipse at 20% 50%,rgba(196,160,60,.07) 0%,transparent 60%), radial-gradient(ellipse at 80% 20%,rgba(34,85,34,.14) 0%,transparent 50%)` }} />
-
-      <div className="fixed left-0 top-0 bottom-0 w-[232px] bg-[rgba(7,18,9,0.98)] border-r border-[rgba(196,160,60,0.15)] flex flex-col z-[100]">
-        <div className="p-6 pb-[18px] border-b border-[rgba(196,160,60,0.1)]">
-          <div className="text-[9px] tracking-[3px] text-[#C4A03C] uppercase mb-1">Dinas Pariwisata</div>
-          <div className="text-base font-bold text-[#E8DCC8] leading-tight">Sumatera Barat</div>
-          <div className="text-[9px] text-[#5A4820] mt-1 tracking-wider">Calendar of Events</div>
-        </div>
-
-        <div className={`m-3 p-2.5 rounded-lg border ${isProvinsi ? "bg-[rgba(196,160,60,0.08)] border-[rgba(196,160,60,0.2)]" : "bg-[rgba(78,180,130,0.07)] border-[rgba(78,180,130,0.15)]"}`}>
-          <div className={`text-[9px] tracking-widest uppercase mb-1 ${isProvinsi ? "text-[#C4A03C]" : "text-[#4CAF82]"}`}>
-            {isProvinsi?"🏛 Admin Provinsi":"🏘 Admin Kab/Kota"}
+    <div className="min-h-screen bg-[#f8efe3] text-slate-900 flex font-sans selection:bg-[#D4AF37] selection:text-white">
+      
+      {/* ── SIDEBAR ── */}
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed inset-y-0 z-50 shadow-sm">
+        <div className="p-8 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-[#D4AF37]/10 rounded-xl flex items-center justify-center border border-[#D4AF37]/20">
+              <MapPin className="text-[#D4AF37] w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-[8px] tracking-[4px] text-[#B8860B] uppercase font-bold text-opacity-80">Sumatera Barat</div>
+              <div className="text-sm font-bold tracking-tight text-slate-800">CoE Admin v2</div>
+            </div>
           </div>
-          <div className="text-[11px] text-[#C8B890] font-semibold">{user.nama}</div>
-          {!isProvinsi&&<div className="text-[10px] text-[#5A5040] mt-0.5">{user.kabupatenKota}</div>}
+
+          <div className={`p-4 rounded-2xl border ${isProvinsi ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
+            <div className={`text-[9px] uppercase font-bold mb-1 tracking-widest ${isProvinsi ? "text-amber-700" : "text-emerald-700"}`}>
+              {isProvinsi ? "Dinas Provinsi" : "Admin Wilayah"}
+            </div>
+            <div className="text-xs font-bold text-slate-700 truncate">{user.nama}</div>
+            {!isProvinsi && <div className="text-[10px] text-slate-400 mt-1 truncate">{user.kabupatenKota}</div>}
+          </div>
         </div>
 
-        <nav className="p-2.5">
-          <div className="text-[9px] tracking-widest text-[#2A2015] uppercase p-2">Menu</div>
-          {navItems.map(n=>(
-            <button key={n.key} onClick={()=>{setView(n.key);setForm(initialForm);setEditId(null);}}
-              className={`flex items-center gap-2.5 w-full p-2.5 mb-0.5 rounded-lg border-none cursor-pointer text-left transition-all border-l-2
-                ${view===n.key ? "bg-[rgba(196,160,60,0.12)] text-[#C4A03C] border-l-[#C4A03C]" : "bg-transparent text-[#7A6E5A] border-l-transparent"}`}>
-              <span className="text-sm">{n.icon}</span>{n.label}
-            </button>
-          ))}
+        <nav className="flex-1 p-4 space-y-1">
+          <MenuBtn key="dash" active={view==="dashboard"} icon={LayoutDashboard} label="Dashboard" onClick={()=>setView("dashboard")} />
+          <MenuBtn key="form" active={view==="form"} icon={PlusCircle} label="Tambah Event" onClick={()=>{setForm(initialForm); setEditId(null); setView("form");}} />
+          <MenuBtn key="list" active={view==="list"} icon={ListOrdered} label="Daftar Event" onClick={()=>setView("list")} />
+          <MenuBtn key="cal" active={view==="calendar"} icon={CalendarIcon} label="Kalender" onClick={()=>setView("calendar")} />
         </nav>
 
-        {isProvinsi && (
-          <div className="p-2.5 border-t border-[rgba(196,160,60,0.08)] mt-1">
-            <div className="text-[9px] tracking-widest text-[#2A2015] uppercase p-2">Data</div>
-            <SidebarAction icon="↻" label="Refresh Data" sub="ambil data dari server" color="#4CAF82" onClick={handleRefresh} />
-            <SidebarAction icon="📊" label="Export Excel" sub=".xlsx" color="#4CAF82" onClick={()=>exportToExcel(events)} />
-            <SidebarAction icon="💾" label="Export JSON" sub=".json" color="#7EB8F7" onClick={()=>exportToJSON(events)} />
-            <SidebarAction icon="📂" label="Import JSON" sub="restore" color="#E8A820" onClick={()=>importRef.current?.click()} />
-            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
-          </div>
-        )}
+        <div className="p-4 border-t border-slate-100 space-y-2">
+          {isProvinsi && (
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div className="text-[9px] uppercase font-bold text-slate-500 tracking-widest opacity-60">Pusat Data</div>
+              
+              <button onClick={()=>exportToExcel(events)} className="flex items-center gap-2.5 w-full p-2.5 rounded-xl text-[10px] text-amber-700 border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-all font-bold">
+                <FileSpreadsheet size={14} /> Eksport Excel/CSV
+              </button>
 
-        <div className="mt-auto p-4 border-t border-[rgba(196,160,60,0.08)]">
-          <button onClick={onLogout} className="flex items-center gap-2 w-full p-2 rounded-lg border border-[rgba(224,90,90,0.2)] bg-[rgba(224,90,90,0.05)] text-[#A05050] text-[11px] cursor-pointer">
-            <span>⬡</span> Keluar
+              <button onClick={exportToJSON} className="flex items-center gap-2.5 w-full p-2.5 rounded-xl text-[10px] text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-all font-bold">
+                <Download size={14} /> Backup Ke JSON
+              </button>
+
+              <button onClick={()=>fileInputRef.current?.click()} className="flex items-center gap-2.5 w-full p-2.5 rounded-xl text-[10px] text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-all font-bold">
+                <Upload size={14} /> Import JSON
+              </button>
+              
+              <input type="file" ref={fileInputRef} onChange={handleImportJSON} accept=".json" className="hidden" />
+            </div>
+          )}
+          <button onClick={onLogout} className="flex items-center gap-2.5 w-full p-3 rounded-xl text-xs text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-all font-bold">
+            <LogOut size={16} /> Keluar
           </button>
+          <div className="pt-2 text-center">
+            <span className="text-[9px] text-slate-300 font-bold uppercase tracking-[2px]">Design by Minangkaos</span>
+          </div>
         </div>
-      </div>
+      </aside>
 
-      <div className="ml-[232px] min-h-screen relative z-1">
-        <div className="p-4 px-8 border-b border-[rgba(196,160,60,0.08)] bg-[rgba(7,18,9,0.82)] backdrop-blur-xl sticky top-0 z-50 flex items-center justify-between">
+      {/* ── CONTENT ── */}
+      <main className="flex-1 ml-64 p-8 relative">
+        <header className="flex justify-between items-center mb-10">
           <div>
-            <div className="text-lg font-bold text-[#E8DCC8]">{viewLabel[view]}</div>
-            <div className="text-[10px] text-[#4A4030] mt-0.5">{new Date().toLocaleDateString("id-ID",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-800">{view.charAt(0).toUpperCase() + view.slice(1)}</h1>
+            <p className="text-slate-500 text-xs mt-1">
+              Data terintegrasi secara realtime • Sync terakhir: {lastSync || "Menunggu..."}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            {sheetLoading && <div className="text-[11px] text-[#4CAF82] flex items-center gap-1"><span className="w-2.5 h-2.5 border-2 border-[#4CAF82] border-t-transparent animate-spin-custom rounded-full" /> Memuat...</div>}
-            {view!=="form"&&(
-              <button onClick={()=>{setForm(isProvinsi?initialForm:{...initialForm, kabupatenKota:user.kabupatenKota}); setEditId(null); setView("form");}}
-                className="p-2 px-4 bg-gradient-to-br from-[#C4A03C] to-[#A07828] text-[#0D1B0F] border-none rounded-md text-xs font-bold cursor-pointer transition-opacity hover:opacity-90">+ Tambah Event</button>
+          <div className="flex items-center gap-4">
+            {sheetLoading && (
+              <div className="flex items-center gap-2 text-emerald-600 text-[10px] font-bold uppercase tracking-widest bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
+                <RefreshCcw size={12} className="animate-spin" /> Sedang Sinkron
+              </div>
             )}
+            <button onClick={()=>fetchUpdatedData()} className="p-3 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all shadow-sm group">
+              <RefreshCcw size={18} className="text-[#B8860B] group-active:rotate-180 transition-transform duration-500" />
+            </button>
           </div>
-        </div>
+        </header>
 
-        <div className="p-8">
-          {view==="dashboard"&&(
-            <div>
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                {[
-                  {label:"Total Event",value:totalEvt,icon:"✦",color:"#C4A03C"},
-                  {label:"Sudah Diajukan",value:diajukan,icon:"✉",color:"#4CAF82"},
-                  {label:"Target Wisatawan",value:totalTarget.toLocaleString("id-ID"),icon:"⊙",color:"#7EB8F7"},
-                ].map((s,i)=>(
-                  <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-5">
-                    <div style={{color:s.color}} className="text-2xl mb-2">{s.icon}</div>
-                    <div className="text-2xl font-bold text-[#E8DCC8]">{s.value}</div>
-                    <div className="text-[11px] text-[#5A5040] mt-1">{s.label}</div>
-                  </div>
-                ))}
-              </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={view}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {view==="dashboard" && (
+              <div key="view-dash" className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <StatCard key="stat-total" label="Total Event" value={stats.total} icon={LayoutDashboard} color="#B8860B" />
+                  <StatCard key="stat-target" label="Target Wisatawan" value={stats.target.toLocaleString("id-ID")} icon={User} color="#D4AF37" />
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white/2 border border-white/5 rounded-xl p-5">
-                  <div className="text-[10px] text-[#C4A03C] mb-4 tracking-widest uppercase">Event Terbaru</div>
-                  {events.slice(-6).reverse().map(e=>(
-                    <div key={e.id} onClick={()=>{setSelEvent(e);setView("detail");}} className="p-2 border-b border-white/5 cursor-pointer hover:bg-white/5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] text-[#E8DCC8] font-semibold flex-1">{e.namaEvent}</span>
-                        <StatusBadge status={e.status}/>
-                      </div>
-                      <div className="text-[10px] text-[#4A4030] mt-1">{e.kabupatenKota} · {e.tanggalMulai}</div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="font-bold text-lg flex items-center gap-2 text-slate-800"><BarChart3 size={20} className="text-[#B8860B]" /> Distribusi Wilayah</h3>
+                      <button onClick={()=>setView("list")} className="text-[10px] uppercase font-bold text-slate-400 hover:text-[#B8860B] transition-colors">Lihat Semua</button>
                     </div>
-                  ))}
-                </div>
-                <div className="bg-white/2 border border-white/5 rounded-xl p-5">
-                  <div className="text-[10px] text-[#C4A03C] mb-4 tracking-widest uppercase">Analisis (AI)</div>
-                  {aiResult ? <div className="text-xs text-[#C8BAA0] leading-relaxed whitespace-pre-wrap">{aiResult}</div> : <div className="text-[10px] text-[#2A2015] italic">Menganalisis data event...</div>}
-                </div>
-              </div>
-            </div>
-          )}
+                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scroll">
+                      {stats.kabCounts.map((k, i) => (
+                        <div key={k.name} className="flex items-center gap-4">
+                          <div className="text-[10px] font-mono text-slate-300 w-6">{(i+1).toString().padStart(2, '0')}</div>
+                          <div className="flex-1">
+                            <div className="flex justify-between text-xs mb-1.5">
+                              <span className="font-bold text-slate-600">{k.name}</span>
+                              <span className="text-[#B8860B] font-bold">{k.count}</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <motion.div 
+                                initial={{ width: 0 }} 
+                                animate={{ width: `${(k.count / stats.total) * 100}%` }}
+                                className="h-full bg-gradient-to-r from-[#D4AF37] to-[#B8860B] rounded-full" 
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-          {view==="form"&&(
-            <div className="max-w-2xl bg-white/2 border border-white/10 rounded-xl p-6">
-              <FormSection title="Informasi Utama">
-                <FormField label="Nama Event *" full>
-                  <input value={form.namaEvent} onChange={e=>setForm(f=>({...f,namaEvent:e.target.value}))}
-                    placeholder="Nama event..." className="w-full bg-white/5 border border-white/10 text-[#E8DCC8] p-2 rounded-md outline-none text-sm" />
-                </FormField>
-                <FormField label="Provinsi / Kabupaten / Kota *">
-                  {isProvinsi ? (
-                    <select value={form.kabupatenKota} onChange={e=>setForm(f=>({...f,kabupatenKota:e.target.value}))} className="w-full bg-white/5 border border-white/10 text-[#E8DCC8] p-2 rounded-md outline-none text-sm">
-                      <option value="">-- Pilih --</option>
-                      {KABUPATEN_KOTA.map(k=><option key={k}>{k}</option>)}
-                    </select>
-                  ) : (
-                    <input value={user.kabupatenKota} disabled className="w-full bg-white/5 border border-white/10 text-[#E8DCC8] p-2 rounded-md outline-none text-sm opacity-50 cursor-not-allowed" />
-                  )}
-                </FormField>
-                <FormField label="Kategori *">
-                  <select value={form.kategori} onChange={e=>setForm(f=>({...f,kategori:e.target.value}))} className="w-full bg-white/5 border border-white/10 text-[#E8DCC8] p-2 rounded-md outline-none text-sm">
-                    <option value="">-- Pilih --</option>
-                    {KATEGORI.map(k=><option key={k}>{k}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Tanggal Mulai *">
-                  <input type="date" value={form.tanggalMulai} onChange={e=>setForm(f=>({...f,tanggalMulai:e.target.value}))} className="w-full bg-white/5 border border-white/10 text-[#E8DCC8] p-2 rounded-md outline-none text-sm" />
-                </FormField>
-              </FormSection>
-              <div className="flex gap-3 mt-4">
-                <button onClick={handleSubmit} className="p-2.5 px-6 bg-gradient-to-br from-[#C4A03C] to-[#A07828] text-[#0D1B0F] border-none rounded-md text-sm font-bold cursor-pointer">Simpan Event</button>
-                <button onClick={()=>setView("list")} className="p-2.5 px-[18px] bg-transparent text-[#7A6E5A] border border-white/10 rounded-md text-sm cursor-pointer">Batal</button>
-              </div>
-            </div>
-          )}
-
-          {view==="list"&&(
-            <div>
-              <div className="flex gap-2.5 mb-4 flex-wrap bg-white/1 p-4 rounded-xl border border-white/5">
-                <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="🔍 Cari..." className="flex-1 min-w-[200px] bg-white/5 border border-white/10 text-[#E8DCC8] p-2 px-3 rounded-md outline-none text-sm" />
-                <select value={filterKab} onChange={e=>setFilterKab(e.target.value)} className="bg-white/5 border border-white/10 text-[#E8DCC8] p-2 rounded-md outline-none text-sm"><option value="">Wilayah</option>{KABUPATEN_KOTA.map(k=><option key={k}>{k}</option>)}</select>
-              </div>
-              {filtered.map(e=>(
-                <div key={e.id} onClick={()=>{setSelEvent(e);setView("detail");}} className="bg-white/2 border border-white/5 rounded-xl p-4 mb-2 flex gap-4 items-center cursor-pointer hover:bg-white/5">
-                  <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center text-lg">{e.kategori?.includes("Budaya")?"🎭":"✦"}</div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2"><span className="text-sm font-bold text-[#E8DCC8]">{e.namaEvent}</span><StatusBadge status={e.status}/></div>
-                    <div className="text-[11px] text-[#6A5840] mt-0.5">{e.kabupatenKota} · {e.tanggalMulai}</div>
+                  <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="font-bold text-lg flex items-center gap-2 text-slate-800"><Clock size={20} className="text-emerald-600" /> Event Terbaru</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {events.slice(-6).reverse().map(e => (
+                        <div key={e.id} onClick={()=>{setSelEvent(e); setView("detail");}} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-amber-200 hover:bg-amber-50/30 transition-all cursor-pointer group">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform shadow-sm">
+                            <Tag size={16} className="text-slate-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-bold text-slate-700 truncate capitalize">{e.namaEvent}</h4>
+                            <p className="text-[10px] text-slate-500 mt-0.5">{e.kabupatenKota}</p>
+                          </div>
+                          <StatusBadge status={e.status} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
+              </div>
+            )}
+
+            {view==="list" && (
+              <div key="view-list" className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                <div className="p-8 border-b border-slate-100 bg-slate-50/50">
+                   <div className="flex flex-wrap gap-4">
+                      <div className="flex-1 min-w-[280px] relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Cari event, lokasi, atau deskripsi..." className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 pl-12 text-sm focus:border-amber-400 outline-none transition-all placeholder:text-slate-400 shadow-sm" />
+                      </div>
+                      <div className="flex gap-4">
+                        <select value={filterKab} onChange={e=>setFilterKab(e.target.value)} className="bg-white border border-slate-200 rounded-2xl p-3 px-4 text-xs font-semibold outline-none focus:border-amber-400 shadow-sm">
+                          <option value="">Semua Wilayah</option>
+                          {KABUPATEN_KOTA.map(k=><option key={k} value={k}>{k}</option>)}
+                        </select>
+                        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="bg-white border border-slate-200 rounded-2xl p-3 px-4 text-xs font-semibold outline-none focus:border-amber-400 shadow-sm">
+                          <option value="">Semua Status</option>
+                          <option value="Draft">Draft</option>
+                          <option value="Diajukan">Diajukan</option>
+                        </select>
+                        <select value={groupBy} onChange={e=>setGroupBy(e.target.value)} className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-3 px-4 text-xs font-bold outline-none focus:border-amber-400 shadow-sm">
+                          <option value="kabupatenKota">Kelompok Wilayah</option>
+                          <option value="kategori">Kelompok Kategori</option>
+                        </select>
+                      </div>
+                   </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-[10px] uppercase font-bold text-slate-500 tracking-widest bg-slate-50/80">
+                        <th className="px-8 py-5">Nama Event & Wilayah</th>
+                        <th className="px-6 py-5">Kategori</th>
+                        <th className="px-6 py-5">Tanggal</th>
+                        <th className="px-8 py-5 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {groupBy === "none" ? (
+                        filtered.map(e => <EventRow key={e.id} e={e} onClick={() => {setSelEvent(e); setView("detail");}} canEdit={canEdit(e)} handleEdit={handleEdit} setDelConfirm={setDelConfirm} />)
+                      ) : (
+                        Object.entries(
+                          filtered.reduce((acc, e) => {
+                            const key = e[groupBy as keyof EventData] as string || "Lainnya";
+                            if (!acc[key]) acc[key] = [];
+                            acc[key].push(e);
+                            return acc;
+                          }, {} as Record<string, EventData[]>)
+                        ).map(([group, groupEvents]) => (
+                          <React.Fragment key={group}>
+                            <tr className="bg-slate-50/30">
+                              <td colSpan={4} className="px-8 py-3 text-[10px] font-black uppercase tracking-[3px] text-amber-600 bg-amber-50/50">
+                                {group} <span className="ml-2 text-slate-400 font-bold opacity-60">({groupEvents.length})</span>
+                              </td>
+                            </tr>
+                            {groupEvents.map(e => <EventRow key={e.id} e={e} onClick={() => {setSelEvent(e); setView("detail");}} canEdit={canEdit(e)} handleEdit={handleEdit} setDelConfirm={setDelConfirm} />)}
+                          </React.Fragment>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {filtered.length === 0 && (
+                  <div className="p-20 text-center text-[#94A3B8]">
+                    <Search className="mx-auto mb-4 opacity-10" size={48} />
+                    <p className="text-sm">Tidak ditemukan event dengan kriteria tersebut.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {view==="form" && (
+              <div key="view-form" className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-3xl p-10 shadow-lg">
+                <div className="flex items-center gap-4 mb-10 pb-6 border-b border-slate-100">
+                   <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center border border-amber-200 text-amber-700">
+                      {editId ? <Edit2 size={24} /> : <PlusCircle size={24} />}
+                   </div>
+                   <div>
+                     <h3 className="text-xl font-bold text-slate-800">{editId ? "Ubah Data Event" : "Tambah Event Baru"}</h3>
+                     <p className="text-slate-500 text-xs">Pastikan seluruh data yang berbintang (*) terisi dengan benar.</p>
+                   </div>
+                </div>
+
+                <div className="space-y-8">
+                   <FormGrid title="Informasi Utama">
+                     <Inp label="Nama Event *" full val={form.namaEvent} onChange={v=>setForm(f=>({...f,namaEvent:v}))} />
+                     <div className="col-span-1">
+                        <label className="text-[11px] uppercase font-bold text-slate-400 mb-2 block tracking-wider">Wilayah *</label>
+                        {isProvinsi ? (
+                          <select value={form.kabupatenKota} onChange={e=>setForm(f=>({...f,kabupatenKota:e.target.value}))} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm outline-none focus:border-amber-400">
+                            <option value="">-- Pilih Wilayah --</option>
+                            {KABUPATEN_KOTA.map(k=><option key={k} value={k}>{k}</option>)}
+                          </select>
+                        ) : (
+                          <input value={user.kabupatenKota} disabled className="w-full bg-slate-50 border border-slate-100 text-slate-400 p-3.5 rounded-xl text-sm cursor-not-allowed" />
+                        )}
+                     </div>
+                     <div className="col-span-1">
+                        <label className="text-[11px] uppercase font-bold text-slate-400 mb-2 block tracking-wider">Kategori *</label>
+                        <select value={form.kategori} onChange={e=>setForm(f=>({...f,kategori:e.target.value}))} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm outline-none focus:border-amber-400">
+                          <option value="">-- Pilih Kategori --</option>
+                          {KATEGORI.map(k=><option key={k} value={k}>{k}</option>)}
+                        </select>
+                     </div>
+                     <Inp label="Tanggal Mulai *" type="date" val={form.tanggalMulai} onChange={v=>setForm(f=>({...f,tanggalMulai:v}))} />
+                     <Inp label="Tanggal Selesai" type="date" val={form.tanggalSelesai || ""} onChange={v=>setForm(f=>({...f,tanggalSelesai:v}))} />
+                     <Inp label="Lokasi / Venue" val={form.lokasi || ""} onChange={v=>setForm(f=>({...f,lokasi:v}))} full />
+                     <div className="col-span-2">
+                        <label className="text-[11px] uppercase font-bold text-slate-400 mb-2 block tracking-wider">Deskripsi Singkat</label>
+                        <textarea value={form.deskripsi} onChange={e=>setForm(f=>({...f,deskripsi:e.target.value}))} rows={4} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm outline-none focus:border-amber-400 resize-none placeholder:text-slate-400" />
+                     </div>
+                   </FormGrid>
+
+                   <FormGrid title="Teknis & Anggaran">
+                     <Inp label="Target Wisatawan" type="number" val={form.targetWisatawan || ""} onChange={v=>setForm(f=>({...f,targetWisatawan:v}))} />
+                     <Inp label="Estimasi Anggaran (Rp)" type="number" val={form.anggaran || ""} onChange={v=>setForm(f=>({...f,anggaran:v}))} />
+                   </FormGrid>
+
+                   <FormGrid title="Informasi Narahubung">
+                     <Inp label="Nama Penanggung Jawab" val={form.kontakNama || ""} onChange={v=>setForm(f=>({...f,kontakNama:v}))} />
+                     <Inp label="Nomer Telp / WA" val={form.kontakHP || ""} onChange={v=>setForm(f=>({...f,kontakHP:v}))} />
+                     <Inp label="Email" type="email" full val={form.kontakEmail || ""} onChange={v=>setForm(f=>({...f,kontakEmail:v}))} />
+                   </FormGrid>
+
+                   <div className="flex gap-4 pt-4">
+                      <button onClick={handleSubmit} className="flex-1 py-4 bg-gradient-to-r from-amber-500 to-amber-700 text-white rounded-2xl font-bold uppercase tracking-widest shadow-lg shadow-amber-500/20 hover:scale-[1.01] transition-all">
+                        {editId ? "Simpan Perubahan" : "Simpan Data Event"}
+                      </button>
+                      <button onClick={()=>setView("list")} className="px-10 py-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all">
+                        Batal
+                      </button>
+                   </div>
+                </div>
+              </div>
+            )}
+
+            {view==="calendar" && (
+               <div key="view-cal" className="bg-white border border-slate-200 rounded-3xl p-10 shadow-sm">
+                 <div className="flex items-center justify-between mb-10">
+                    <div className="flex items-center gap-6">
+                       <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}} className="w-12 h-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center hover:bg-slate-50 transition-all text-[#B8860B] shadow-sm"><ChevronLeft size={24} /></button>
+                       <h3 className="text-2xl font-bold w-48 text-center text-slate-800">{BULAN[calMonth]} {calYear}</h3>
+                       <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}} className="w-12 h-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center hover:bg-slate-50 transition-all text-[#B8860B] shadow-sm"><ChevronRight size={24} /></button>
+                    </div>
+                    <div className="flex items-center gap-4 text-[11px] text-slate-400 font-bold uppercase tracking-wider">
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-400 rounded-sm" /> Berlangsung</div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-100 rounded-sm" /> Kosong</div>
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-7 gap-1">
+                    {["Min","Sen","Sel","Rab","Kam","Jum","Sab"].map(d=> (
+                      <div key={d} className="text-center text-[10px] uppercase font-bold text-slate-400 py-4 bg-slate-50/50 border border-slate-100 rounded-xl mb-2">{d}</div>
+                    ))}
+                    {Array(getFD(calYear,calMonth)).fill(null).map((_,i)=><div key={`pad-${i}`} className="min-h-[120px] rounded-2xl border border-transparent opacity-10" />)}
+                    {Array(getDIM(calYear,calMonth)).fill(null).map((_,i)=>{
+                      const day=i+1;
+                      const dayEvs=eInDay(day);
+                      const isToday=new Date().getFullYear()===calYear&&new Date().getMonth()===calMonth&&new Date().getDate()===day;
+                      const dateObj = new Date(calYear, calMonth, day);
+                      const isSunday = dateObj.getDay() === 0;
+                      const dateStr = `${calYear}-${(calMonth + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                      const holiday = HOLIDAYS_2026[dateStr];
+
+                      return (
+                        <div key={`day-${day}`} className={`min-h-[120px] rounded-2xl border p-3 flex flex-col gap-1.5 transition-all group hover:z-10 hover:scale-[1.03] hover:shadow-xl ${isToday ? "bg-amber-50 border-amber-200" : (holiday || isSunday) ? "bg-red-50/50 border-red-100" : "bg-white border-slate-100 hover:border-slate-200"}`}>
+                           <div className="flex justify-between items-start">
+                             <div className={`text-2xl font-black opacity-80 ${isToday ? "text-amber-600" : (holiday || isSunday) ? "text-red-500" : "text-slate-200 group-hover:text-slate-400"}`}>{day}</div>
+                             {holiday && <div className="text-[7px] md:text-[8px] font-black text-red-600 bg-red-100/50 px-1.5 py-0.5 rounded uppercase leading-tight mt-1 text-right whitespace-normal break-words flex-1 max-w-[65%]" title={holiday}>{holiday}</div>}
+                           </div>
+                           <div className="flex-1 space-y-1 overflow-y-auto max-h-[80px] custom-scroll">
+                              {dayEvs.map((e, idx)=>(
+                                <div key={`${e.id}-${idx}`} onClick={()=>{setSelEvent(e); setView("detail");}} className="text-[10px] leading-tight bg-slate-50 p-1.5 rounded-lg border border-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-800 hover:border-amber-200 cursor-pointer truncate font-medium">
+                                  {e.namaEvent}
+                                </div>
+                              ))}
+                           </div>
+                        </div>
+                      );
+                    })}
+                 </div>
+               </div>
+            )}
+
+            {view==="detail" && selEvent && (
+              <div key="view-detail" className="max-w-4xl mx-auto space-y-8">
+                 <button onClick={()=>setView("list")} className="flex items-center gap-2 text-xs font-bold text-amber-700 bg-amber-50 px-5 py-2.5 rounded-xl border border-amber-200 hover:bg-amber-100 transition-all">
+                    <ChevronLeft size={16} /> Kembali ke Daftar
+                 </button>
+                 
+                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                   <div className="lg:col-span-2 space-y-8">
+                      <div className="bg-white border border-slate-200 rounded-3xl p-10 relative overflow-hidden shadow-sm">
+                         <div className="absolute top-0 left-0 w-2 h-full bg-[#B8860B]" />
+                         <div className="flex items-start justify-between mb-8">
+                           <div>
+                              <StatusBadge status={selEvent.status} />
+                              <h2 className="text-3xl font-black mt-4 tracking-tight text-slate-800 capitalize">{selEvent.namaEvent}</h2>
+                              <div className="flex items-center gap-4 mt-6 text-sm text-slate-500 font-medium">
+                                <div className="flex items-center gap-2 pr-4 border-r border-slate-200"><MapPin size={16} className="text-amber-600" /> {selEvent.kabupatenKota}</div>
+                                <div className="flex items-center gap-2"><Tag size={16} className="text-amber-600" /> {selEvent.kategori}</div>
+                              </div>
+                           </div>
+                         </div>
+                         <div className="space-y-6">
+                            <div>
+                               <label className="text-[10px] uppercase font-bold text-slate-400 mb-2 block tracking-widest">Deskripsi</label>
+                               <div className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">{selEvent.deskripsi || "Tidak ada deskripsi tersedia."}</div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-100">
+                               <div>
+                                  <label className="text-[10px] uppercase font-bold text-slate-400 mb-2 block tracking-widest">Lokasi</label>
+                                  <div className="text-sm font-bold text-slate-700">{selEvent.lokasi || "-"}</div>
+                                </div>
+                               <div>
+                                  <label className="text-[10px] uppercase font-bold text-slate-400 mb-2 block tracking-widest">Periode</label>
+                                  <div className="text-sm font-bold text-slate-700">{selEvent.tanggalMulai} {selEvent.tanggalSelesai ? ` - ${selEvent.tanggalSelesai}` : ""}</div>
+                               </div>
+                            </div>
+                         </div>
+                      </div>
+                   </div>
+
+                   <div className="space-y-8">
+                      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                         <h4 className="font-bold text-slate-700 mb-6 flex items-center gap-2 border-b border-slate-100 pb-4 uppercase text-[10px] tracking-widest"><Info size={18} className="text-[#B8860B]" /> Data Teknis</h4>
+                         <div className="space-y-6">
+                            <DetailRow label="Target Pengunjung" val={selEvent.targetWisatawan ? Number(selEvent.targetWisatawan).toLocaleString("id-ID") + " Wisatawan" : "-"} />
+                            <DetailRow label="Anggaran Dana" val={"Rp " + Number(selEvent.anggaran || 0).toLocaleString("id-ID")} />
+                            <DetailRow label="Kontak Person" val={selEvent.kontakNama || "-"} />
+                            <DetailRow label="Nomer Ponsel (WA)" val={selEvent.kontakHP || "-"} />
+                         </div>
+                      </div>
+
+                      {canEdit(selEvent) && (
+                        <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 space-y-4">
+                           {selEvent.status === "Draft" && (
+                             <button onClick={()=>handleAjukan(selEvent.id)} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:scale-[1.02] shadow-lg shadow-emerald-600/20 transition-all">Ajukan ke Provinsi</button>
+                           )}
+                           <div className="grid grid-cols-2 gap-4">
+                              <button onClick={()=>handleEdit(selEvent)} className="py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 transition-all shadow-sm"><Edit2 size={14} className="inline mr-2" /> Edit</button>
+                              <button onClick={(ev)=>{ev.stopPropagation(); setDelConfirm(selEvent.id);}} className="py-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-red-100 transition-all shadow-sm"><Trash2 size={14} className="inline mr-2" /> Hapus</button>
+                           </div>
+                        </div>
+                      )}
+                   </div>
+                 </div>
+              </div>
+            )}
+            
+            {view==="reports" && <div className="p-20 text-center text-[#94A3B8]">Fitur Laporan Analitik mendalam sedang dalam pengembangan sistem.</div>}
+            {view==="help" && <div className="p-20 text-center text-[#94A3B8]">Bantuan pengoperasian CMS CoE Sumbar sedang disusun oleh tim teknis.</div>}
+
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
+      {/* ── ALERTS & TOASTS ── */}
+      {delConfirm !== null && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white border border-slate-200 rounded-3xl p-10 max-w-sm w-full text-center shadow-2xl">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-100 text-red-600"><Trash2 size={32} /></div>
+            <h3 className="text-xl font-bold mb-2 text-slate-800">Hapus Event?</h3>
+            <p className="text-xs text-slate-500 mb-8">Data akan dihapus secara permanen dari server Google Sheets.</p>
+            <div className="flex gap-4">
+              <button onClick={()=>{ if(delConfirm !== null) handleDelete(delConfirm); }} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase cursor-pointer hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20">Ya, Hapus</button>
+              <button onClick={()=>setDelConfirm(null)} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-xs uppercase cursor-pointer hover:bg-slate-200 transition-colors">Batal</button>
             </div>
-          )}
+          </motion.div>
         </div>
-      </div>
+      )}
 
-      {toast && <div className={`fixed bottom-6 right-6 z-[999] p-3 px-5 rounded-lg text-xs shadow-xl border text-[#E8DCC8] ${toast.type==="error"?"bg-red-950 border-red-500":"bg-green-950 border-green-500"}`}>{toast.msg}</div>}
-
-      {delConfirm && (
-        <Modal>
-          <div className="text-2xl mb-2">⚠</div>
-          <div className="text-sm text-[#E8DCC8] mb-1">Hapus Event?</div>
-          <button onClick={()=>handleDelete(delConfirm)} className="p-2 px-4 bg-red-900 border border-red-500 rounded-md text-xs text-white">Hapus</button>
-          <button onClick={()=>setDelConfirm(null)} className="ml-2 p-2 px-4 bg-transparent border border-white/10 rounded-md text-xs text-[#7A6E5A]">Batal</button>
-        </Modal>
+      {toast && (
+        <motion.div initial={{ x: 100, opacity: 0 }} animate={{ x: 10, opacity: 1 }} className={`fixed bottom-8 right-8 z-[2000] p-4 px-6 rounded-2xl border shadow-2xl flex items-center gap-3 transition-all ${toast.type==="error" ? "bg-red-50 border-red-200 text-red-800" : "bg-white border-slate-200 text-slate-800"}`}>
+          <div className={toast.type==="error" ? "text-red-500" : "text-emerald-500"}>{toast.type==="error" ? <Info size={18} /> : <CheckCircle2 size={18} />}</div>
+          <div className="text-xs font-bold uppercase tracking-widest">{toast.msg}</div>
+        </motion.div>
       )}
     </div>
   );
 }
 
-function Modal({children}: {children: React.ReactNode}) {
-  return <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center"><div className="bg-[#0B1A0D] border border-white/10 rounded-2xl p-8 max-w-sm w-full text-center">{children}</div></div>;
+// ── SUBCOMPONENTS ─────────────────────────────────────────────
+function MenuBtn({ icon: Icon, label, active, onClick }: { icon: any; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={`flex items-center gap-3 w-full p-3.5 px-4 rounded-2xl text-[13px] font-bold tracking-tight transition-all border outline-none ${active ? "bg-amber-50 border-amber-200 text-amber-700 shadow-sm" : "bg-transparent border-transparent text-slate-400 hover:bg-slate-50 hover:text-slate-700"}`}>
+      <Icon size={18} className={active ? "text-amber-600" : "text-slate-400 opacity-70"} />
+      {label}
+    </button>
+  );
 }
 
-function SidebarAction({icon,label,sub,color,onClick}: {icon: string; label: string; sub: string; color: string; onClick: () => void}) {
-  return <button onClick={onClick} className="flex items-center gap-2.5 w-full p-2 rounded-lg border-none cursor-pointer text-left bg-transparent hover:bg-white/5"><span className="text-lg">{icon}</span><div><div style={{color}} className="text-xs font-semibold">{label}</div><div className="text-[9px] text-[#2A2015]">{sub}</div></div></button>;
+function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-3xl p-8 relative overflow-hidden group hover:border-amber-200 transition-all shadow-sm">
+       <div className="absolute -right-4 -bottom-4 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity text-slate-200"><Icon size={140} /></div>
+       <div style={{ backgroundColor: `${color}10`, borderColor: `${color}30` }} className="w-12 h-12 rounded-2xl flex items-center justify-center border mb-6 relative z-10 shadow-sm">
+          <Icon size={24} style={{ color }} />
+       </div>
+       <div className="text-3xl font-black tracking-tight mb-1 relative z-10 text-slate-800">{value}</div>
+       <div className="text-[10px] uppercase font-bold text-slate-400 tracking-[2px] relative z-10">{label}</div>
+    </div>
+  );
 }
 
-function FormSection({title,children}: {title: string; children: React.ReactNode}) {
-  return <div className="mb-4"><div className="text-[9px] text-gold tracking-widest uppercase mb-3 border-b border-white/5 pb-1">{title}</div><div className="grid grid-cols-2 gap-3">{children}</div></div>;
+function Inp({ label, type="text", val, onChange, full, placeholder }: { label: string; type?: string; val: string | number; onChange: (v: string)=>void; full?: boolean; placeholder?: string }) {
+  return (
+    <div className={full ? "col-span-2" : "col-span-1"}>
+       <label className="text-[11px] uppercase font-bold text-slate-400 mb-2 block tracking-wider ml-1">{label}</label>
+       <input type={type} value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm outline-none focus:border-amber-400 focus:bg-white transition-all text-slate-800 shadow-sm placeholder:text-slate-300" />
+    </div>
+  );
 }
 
-function FormField({label,children,full}: {label: string; children: React.ReactNode; full?: boolean}) {
-  return <div style={{gridColumn:full?"1/-1":"auto"}}><label className="text-[10px] text-[#4A4030] block mb-1 font-bold">{label}</label>{children}</div>;
+function FormGrid({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h4 className="text-[10px] uppercase font-bold text-amber-600 mb-5 tracking-[3px] flex items-center gap-3">
+         {title} <div className="flex-1 h-px bg-slate-100" />
+      </h4>
+      <div className="grid grid-cols-2 gap-6">{children}</div>
+    </div>
+  );
 }
 
-function StatusBadge({status}: {status: string}) {
-  const s=STATUS_BADGE[status]||STATUS_BADGE["Draft"];
-  return <span className="text-[9px] p-0.5 px-2 rounded-md border" style={{backgroundColor:s.bg, color:s.color, borderColor:s.border}}>{status}</span>;
+function DetailRow({ label, val }: { label: string; val: string }) {
+  return (
+    <div className="flex justify-between items-center py-1">
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
+      <span className="text-xs font-bold text-slate-700">{val}</span>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_BADGE[status] || STATUS_BADGE["Draft"];
+  return (
+    <div style={{ backgroundColor: cfg.bg, color: cfg.color, borderColor: cfg.border }} className="inline-flex items-center px-2.5 py-1 rounded-full border text-[9px] font-bold uppercase tracking-widest">
+      {status === "Diajukan" ? <CheckCircle2 size={10} className="mr-1.5" /> : <Clock size={10} className="mr-1.5" />}
+      {status}
+    </div>
+  );
+}
+
+function EventRow({ e, onClick, canEdit, handleEdit, setDelConfirm }: { e: EventData; onClick: () => void; canEdit: boolean; handleEdit: (e: EventData) => void; setDelConfirm: (id: number) => void }) {
+  return (
+    <tr className="group hover:bg-slate-50 transition-colors cursor-pointer" onClick={onClick}>
+      <td className="px-8 py-5">
+        <div className="font-bold text-sm text-slate-700 group-hover:text-amber-700 transition-colors capitalize">{e.namaEvent}</div>
+        <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5 font-medium"><MapPin size={10} /> {e.kabupatenKota}</div>
+      </td>
+      <td className="px-6 py-5">
+        <div className="text-xs text-slate-500 font-medium">{e.kategori}</div>
+      </td>
+      <td className="px-6 py-5">
+        <div className="text-xs font-mono text-slate-600">{e.tanggalMulai}</div>
+      </td>
+      <td className="px-8 py-5 text-right" onClick={ev=>ev.stopPropagation()}>
+        <div className="flex justify-end gap-2 text-slate-400">
+            {canEdit && (
+              <>
+                <RowBtn key={`edit-${e.id}`} icon={Edit2} color="#B8860B" onClick={(ev)=>{ ev.stopPropagation(); handleEdit(e); }} />
+                <RowBtn key={`del-${e.id}`} icon={Trash2} color="#E11D48" onClick={(ev)=>{ ev.stopPropagation(); setDelConfirm(e.id); }} />
+              </>
+            )}
+            <RowBtn key={`view-${e.id}`} icon={ExternalLink} color="#64748B" onClick={(ev)=>{ ev.stopPropagation(); onClick(); }} />
+          </div>
+      </td>
+    </tr>
+  );
+}
+
+function RowBtn({ icon: Icon, color, onClick }: { icon: any; color: string; onClick: (e: any)=>void }) {
+  return (
+    <button onClick={onClick} className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200 transition-all hover:scale-110 active:scale-95 shadow-sm" style={{ color }}>
+      <Icon size={14} />
+    </button>
+  );
 }
