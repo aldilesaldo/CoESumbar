@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Georgia", "Times New Roman", serif;
+}
+
+:root {
+  --bg-dark: #0D1B0F;
+  --gold: #C4A03C;
+  --gold-dim: #6A5830;
+  --text-cream: #E8DCC8;
+}
+
+body {
+  background: var(--bg-dark);
+  color: var(--text-cream);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(196, 160, 60, 0.3);
+  border-radius: 3px;
+}
+
+input[type=date]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+}
+
+select option {
+  background: #0D1B0F;
+  color: #E8DCC8;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+.animate-spin-custom {
+  animation: spin 0.8s linear infinite;
+}

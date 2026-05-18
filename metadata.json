@@ -1,0 +1,6 @@
+{
+  "name": "CoE Sumbar Admin Dashboard",
+  "description": "Sistem pendataan Calendar of Events Dinas Pariwisata Sumatera Barat yang terintegrasi dengan Google Sheets secara realtime.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
