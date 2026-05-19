@@ -124,8 +124,13 @@ async function sheetSaveEvent(event: EventData): Promise<{success: boolean, deta
       body: JSON.stringify({ action: "save", event }),
     });
     if (res.ok) return { success: true };
-    const data = await res.json();
-    return { success: false, detail: data.detail || data.error || `Status ${res.status}` };
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return { success: false, detail: data.detail || data.error || `Status ${res.status}` };
+    } catch(e) {
+      return { success: false, detail: text.substring(0, 50) || `Server Error ${res.status}` };
+    }
   } catch(e: any) { 
     console.warn("Sheet save failed:", e); 
     return { success: false, detail: e.message };

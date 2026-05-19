@@ -14,7 +14,7 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  const SHEET_URL = "https://script.google.com/macros/s/AKfycbyDuXGIgl1nOXJpviThfrrn4ThbH62USbq6GUDfBecl5wx4oRJhk5gnIlBF8D_q1QLffg/exec";
+  const SHEET_URL = "https://script.google.com/macros/s/AKfycbwtvb9Ffd_W0ErZbTvdtVV-z-1jlwLCPK38O0FJ79z9ZQczaUH6W1yx-ofSunGcJtwGwA/exec";
 
   // Proxy for Google Sheets GET
   app.get("/api/events", async (req, res) => {
