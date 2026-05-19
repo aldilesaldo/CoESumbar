@@ -36,7 +36,6 @@ import { motion, AnimatePresence } from 'motion/react';
 
 // ── KONSTANTA ─────────────────────────────────────────────────
 const KABUPATEN_KOTA = [
-  "Provinsi Sumatera Barat",
   "Kota Padang","Kota Bukittinggi","Kota Payakumbuh","Kota Padang Panjang",
   "Kota Solok","Kota Pariaman","Kota Sawahlunto",
   "Kabupaten Agam","Kabupaten Tanah Datar","Kabupaten Padang Pariaman",
@@ -80,7 +79,7 @@ const STATUS_BADGE: Record<string, { bg: string; color: string; border: string }
 };
 
 const ACCOUNTS = [
-  { username:"admin.provinsi", password:"sumbarrancak", role:"provinsi", kabupatenKota:"Provinsi Sumatera Barat", nama:"Admin Dinas Provinsi Sumbar" },
+  { username:"admin.provinsi", password:"sumbarrancak", role:"provinsi", kabupatenKota:"Provinsi Sumatera Barat", nama:"Provinsi Sumatera Barat" },
   ...KABUPATEN_KOTA.map((k)=>({
     username: "admin." + k.toLowerCase().replace(/\s+/g,".").replace(/\//g,""),
     password: "sumbarrancak",
@@ -102,7 +101,6 @@ interface EventData {
   targetWisatawan?: string;
   kontakNama?: string;
   kontakHP?: string;
-  kontakEmail?: string;
   anggaran?: string;
   status: string;
   createdAt?: string;
@@ -111,7 +109,7 @@ interface EventData {
 const initialForm: Omit<EventData, 'id'> = {
   namaEvent:"", kabupatenKota:"", kategori:"", tanggalMulai:"",
   tanggalSelesai:"", lokasi:"", deskripsi:"", targetWisatawan:"",
-  kontakNama:"", kontakHP:"", kontakEmail:"", anggaran:"", status:"Draft",
+  kontakNama:"", kontakHP:"", anggaran:"", status:"Draft",
 };
 
 const STORAGE_KEY  = "coe_sumbar_v2_events";
@@ -146,7 +144,9 @@ async function sheetGetAll(): Promise<EventData[] | null> {
   try {
     const res = await fetch("/api/events");
     const data = await res.json();
-    return data.events || null;
+    if (Array.isArray(data)) return data;
+    if (data && data.events && Array.isArray(data.events)) return data.events;
+    return null;
   } catch(e) { console.warn("Sheet getAll failed:", e); return null; }
 }
 
@@ -156,12 +156,12 @@ function getSeedData(): EventData[] {
       kategori:"Festival Budaya", tanggalMulai:"2025-07-05", tanggalSelesai:"2025-07-14",
       lokasi:"Pantai Gandoriah, Pariaman", deskripsi:"Festival tradisi tabuik yang digelar setiap Muharram.",
       targetWisatawan:"5000", kontakNama:"Dedi Rahmat", kontakHP:"081234567890",
-      kontakEmail:"pariwisata@pariaman.go.id", anggaran:"500000000", status:"Diajukan", createdAt:"2025-01-10" },
+      anggaran:"500000000", status:"Diajukan", createdAt:"2025-01-10" },
     { id:2, namaEvent:"Tour de Singkarak", kabupatenKota:"Kabupaten Solok",
       kategori:"Olahraga & Adventure", tanggalMulai:"2025-10-15", tanggalSelesai:"2025-10-22",
       lokasi:"Danau Singkarak & sekitarnya", deskripsi:"Balap sepeda internasional mengelilingi alam Sumatera Barat.",
       targetWisatawan:"20000", kontakNama:"Roni Amir", kontakHP:"082345678901",
-      kontakEmail:"pariwisata@solok.go.id", anggaran:"2000000000", status:"Diajukan", createdAt:"2025-02-01" },
+      anggaran:"2000000000", status:"Diajukan", createdAt:"2025-02-01" },
   ];
 }
 
@@ -173,7 +173,7 @@ function exportToExcel(events: EventData[]) {
     "Target Wisatawan":e.targetWisatawan?parseInt(e.targetWisatawan):0,
     "Estimasi Anggaran (Rp)":e.anggaran?parseInt(e.anggaran):0,
     "Narahubung":e.kontakNama||"-","No. HP":e.kontakHP||"-",
-    "Email":e.kontakEmail||"-","Status":e.status,"Tanggal Input":e.createdAt||"-",
+    "Status":e.status,"Tanggal Input":e.createdAt||"-",
   }));
   const ws=XLSX.utils.json_to_sheet(rows);
   ws["!cols"]=[{wch:5},{wch:35},{wch:25},{wch:20},{wch:14},{wch:14},{wch:30},{wch:40},{wch:18},{wch:22},{wch:20},{wch:16},{wch:28},{wch:12},{wch:14}];
@@ -205,10 +205,11 @@ function LoginScreen({ onLogin }: { onLogin: (u: any) => void }) {
   const [uname, setUname] = useState("");
   const [pass,  setPass]  = useState("");
   const [err,   setErr]   = useState("");
-  const [show,  setShow]  = useState(false);
 
-  const doLogin = () => {
-    const acc = ACCOUNTS.find(a=>a.username===uname.trim()&&a.password===pass);
+  const doLogin = (override?: any) => {
+    const targetU = override?.username || uname;
+    const targetP = override?.password || pass;
+    const acc = ACCOUNTS.find(a=>a.username===targetU.trim()&&a.password===targetP);
     if (!acc) { setErr("Username atau password salah."); return; }
     onLogin(acc);
   };
@@ -220,58 +221,72 @@ function LoginScreen({ onLogin }: { onLogin: (u: any) => void }) {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[420px] bg-white border border-slate-200 rounded-3xl p-10 shadow-[0_32px_80px_rgba(0,0,0,0.1)] relative z-10 overflow-hidden"
+        className="w-full max-w-[420px] bg-white border border-slate-200 rounded-3xl p-8 shadow-[0_32px_80px_rgba(0,0,0,0.1)] relative z-10 overflow-hidden"
       >
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent" />
         
-        <div className="text-center mb-10">
+        <div className="text-center mb-6">
           <motion.div 
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
-            className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-amber-100 shadow-sm"
+            className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-100 shadow-sm"
           >
-            <MapPin className="text-[#B8860B] w-10 h-10" />
+            <MapPin className="text-[#B8860B] w-8 h-8" />
           </motion.div>
           <div className="text-[10px] tracking-[4px] text-amber-700 uppercase mb-1 font-bold">Dinas Pariwisata</div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Sumatera Barat</h1>
-          <div className="text-[11px] text-slate-400 mt-2 font-medium">Sistem Pendataan Calendar of Events</div>
+          <h1 className="text-xl font-black text-slate-800 tracking-tight">Sumatera Barat</h1>
+          <div className="text-[11px] text-slate-400 mt-1 font-medium">Sistem Pendataan Calendar of Events</div>
         </div>
 
-        <div className="space-y-4">
-          <div className="mt-8 pt-8 border-t border-slate-100">
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-[2px] mb-6 text-center opacity-70">Pilih Akun Akses Cepat</div>
-            
-            <div className="space-y-4 max-h-[400px] overflow-y-auto px-1 custom-scroll">
-              {/* Provinsi */}
-              <div>
-                <div className="text-[9px] text-amber-600 mb-2 uppercase tracking-widest font-bold">Provinsi</div>
-                <QuickLoginBtn 
-                  label="Admin Provinsi" 
-                  onClick={() => { setUname("admin.provinsi"); setPass("sumbarrancak"); setTimeout(doLogin, 100); }} 
-                  isProv
-                />
-              </div>
+        {/* Login Form for Province */}
+        <div className="space-y-3 mb-6 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+          <div className="text-[9px] text-amber-600 mb-2 uppercase tracking-widest font-black flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            Provinsi Sumatera Barat
+          </div>
+          <input 
+            type="text" 
+            placeholder="Username Provinsi" 
+            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 shadow-sm transition-all"
+            value={uname}
+            onChange={(e) => setUname(e.target.value)}
+          />
+          <input 
+            type="password" 
+            placeholder="Password" 
+            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 shadow-sm transition-all"
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+          />
+          <button 
+            onClick={() => doLogin()}
+            className="w-full bg-slate-800 text-white rounded-xl py-2.5 text-xs font-bold hover:bg-slate-900 transition-all shadow-md active:scale-[0.98]"
+          >
+            Masuk Akses Provinsi
+          </button>
+        </div>
 
-              {/* Kab/Kota */}
-              <div>
-                <div className="text-[9px] text-emerald-600 mb-2 uppercase tracking-widest font-bold">Kabupaten / Kota</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {ACCOUNTS.filter(a => a.role === "kabkota").map(a => (
-                    <QuickLoginBtn 
-                      key={a.username}
-                      label={a.kabupatenKota || a.nama} 
-                      onClick={() => { setUname(a.username); setPass(a.password); setTimeout(doLogin, 100); }} 
-                    />
-                  ))}
-                </div>
+        {err && <div className="mb-6 text-[10px] text-red-600 bg-red-50 p-3 rounded-xl border border-red-100 font-semibold text-center">{err}</div>}
+
+        <div className="space-y-4">
+          <div className="pt-4 border-t border-slate-100">
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-[2px] mb-4 text-center opacity-70">Akses Cepat Kabupaten / Kota</div>
+            
+            <div className="space-y-4 max-h-[250px] overflow-y-auto px-1 custom-scroll bg-slate-50/30 rounded-2xl p-4 border border-slate-50">
+              <div className="grid grid-cols-2 gap-2">
+                {ACCOUNTS.filter(a => a.role === "kabkota" && a.kabupatenKota !== "Provinsi Sumatera Barat").map(a => (
+                  <QuickLoginBtn 
+                    key={a.username} 
+                    label={a.kabupatenKota} 
+                    onClick={() => doLogin({ username: a.username, password: a.password })} 
+                  />
+                ))}
               </div>
             </div>
           </div>
         </div>
-
-        {err && <div className="mt-4 text-[11px] text-red-600 bg-red-50 p-3 rounded-xl border border-red-100 font-semibold">{err}</div>}
       </motion.div>
-      <div className="absolute bottom-8 left-0 w-full text-center">
+      <div className="absolute bottom-6 left-0 w-full text-center">
         <span className="text-[10px] text-slate-300 font-bold uppercase tracking-[4px]">Design by Minangkaos</span>
       </div>
     </div>
@@ -300,15 +315,18 @@ function QuickLoginBtn({ label, onClick, isProv }: { label: string; onClick: () 
 function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
   const isProvinsi = user.role === "provinsi";
 
-  const [events, setEvents]               = useState<EventData[]>([]);
+  const [events, setEvents]               = useState<EventData[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [view,   setView]                 = useState("dashboard");
   const [form,   setForm]                 = useState<EventData | Omit<EventData, 'id'>>(initialForm);
   const [editId, setEditId]               = useState<number | null>(null);
   const [selEvent, setSelEvent]           = useState<EventData | null>(null);
   const [filterKab, setFilterKab]         = useState("");
   const [filterKat, setFilterKat]         = useState("");
-  const [filterStatus, setFilterStatus]   = useState("");
-  const [groupBy, setGroupBy]             = useState("kabupatenKota");
   const [searchQ, setSearchQ]             = useState("");
   const [calYear,  setCalYear]            = useState(2026);
   const [calMonth, setCalMonth]           = useState(new Date().getMonth());
@@ -353,8 +371,25 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
     if (!silent) setSheetLoading(true);
     const sheetEvents = await sheetGetAll();
     if (sheetEvents && Array.isArray(sheetEvents)) {
-      const cleaned = sheetEvents.filter(e => e.namaEvent && e.namaEvent.toString().trim() !== "");
-      setEvents(cleaned);
+      const cleaned = sheetEvents.filter(e => e && e.namaEvent && e.namaEvent.toString().trim() !== "");
+      
+      // Merge logic: keep local events that might not be in the sheet yet
+      // This solves the "disappearing" issue during sync latency
+      setEvents(prev => {
+        const newEventsMap = new Map(cleaned.map(e => [String(e.id), e]));
+        const merged = [...cleaned];
+        
+        // Add local events that aren't in the fetch result but were created recently (within last 30s)
+        const thirtySecondsAgo = Date.now() - 30000;
+        prev.forEach(p => {
+          if (!newEventsMap.has(String(p.id)) && p.id > thirtySecondsAgo) {
+            merged.push(p);
+          }
+        });
+        
+        return merged;
+      });
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
       setLastSync(new Date().toLocaleTimeString());
     }
@@ -379,10 +414,9 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
       const matchSearch = (e.namaEvent || "").toLowerCase().includes(q) || (e.lokasi || "").toLowerCase().includes(q);
       const matchKab = !filterKab || e.kabupatenKota === filterKab;
       const matchKat = !filterKat || e.kategori === filterKat;
-      const matchStatus = !filterStatus || e.status === filterStatus;
-      return matchSearch && matchKab && matchKat && matchStatus;
+      return matchSearch && matchKab && matchKat;
     });
-  }, [events, searchQ, filterKab, filterKat, filterStatus]);
+  }, [events, searchQ, filterKab, filterKat]);
 
   const stats = useMemo(() => {
     const totalTarget = events.reduce((s, e) => s + parseInt(e.targetWisatawan || "0"), 0);
@@ -575,7 +609,7 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
                     <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scroll">
                       {stats.kabCounts.map((k, i) => (
                         <div key={k.name} className="flex items-center gap-4">
-                          <div className="text-[10px] font-mono text-slate-300 w-6">{(i+1).toString().padStart(2, '0')}</div>
+                          <div className="text-[10px] font-sans text-slate-300 w-6">{(i+1).toString().padStart(2, '0')}</div>
                           <div className="flex-1">
                             <div className="flex justify-between text-xs mb-1.5">
                               <span className="font-bold text-slate-600">{k.name}</span>
@@ -630,14 +664,9 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
                           <option value="">Semua Wilayah</option>
                           {KABUPATEN_KOTA.map(k=><option key={k} value={k}>{k}</option>)}
                         </select>
-                        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="bg-white border border-slate-200 rounded-2xl p-3 px-4 text-xs font-semibold outline-none focus:border-amber-400 shadow-sm">
-                          <option value="">Semua Status</option>
-                          <option value="Draft">Draft</option>
-                          <option value="Diajukan">Diajukan</option>
-                        </select>
-                        <select value={groupBy} onChange={e=>setGroupBy(e.target.value)} className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-3 px-4 text-xs font-bold outline-none focus:border-amber-400 shadow-sm">
-                          <option value="kabupatenKota">Kelompok Wilayah</option>
-                          <option value="kategori">Kelompok Kategori</option>
+                        <select value={filterKat} onChange={e=>setFilterKat(e.target.value)} className="bg-white border border-slate-200 rounded-2xl p-3 px-4 text-xs font-semibold outline-none focus:border-amber-400 shadow-sm">
+                          <option value="">Semua Kategori</option>
+                          {KATEGORI.map(k=><option key={k} value={k}>{k}</option>)}
                         </select>
                       </div>
                    </div>
@@ -653,27 +682,7 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {groupBy === "none" ? (
-                        filtered.map(e => <EventRow key={e.id} e={e} onClick={() => {setSelEvent(e); setView("detail");}} canEdit={canEdit(e)} handleEdit={handleEdit} setDelConfirm={setDelConfirm} />)
-                      ) : (
-                        Object.entries(
-                          filtered.reduce((acc, e) => {
-                            const key = e[groupBy as keyof EventData] as string || "Lainnya";
-                            if (!acc[key]) acc[key] = [];
-                            acc[key].push(e);
-                            return acc;
-                          }, {} as Record<string, EventData[]>)
-                        ).map(([group, groupEvents]) => (
-                          <React.Fragment key={group}>
-                            <tr className="bg-slate-50/30">
-                              <td colSpan={4} className="px-8 py-3 text-[10px] font-black uppercase tracking-[3px] text-amber-600 bg-amber-50/50">
-                                {group} <span className="ml-2 text-slate-400 font-bold opacity-60">({groupEvents.length})</span>
-                              </td>
-                            </tr>
-                            {groupEvents.map(e => <EventRow key={e.id} e={e} onClick={() => {setSelEvent(e); setView("detail");}} canEdit={canEdit(e)} handleEdit={handleEdit} setDelConfirm={setDelConfirm} />)}
-                          </React.Fragment>
-                        ))
-                      )}
+                      {filtered.map(e => <EventRow key={e.id} e={e} onClick={() => {setSelEvent(e); setView("detail");}} canEdit={canEdit(e)} handleEdit={handleEdit} setDelConfirm={setDelConfirm} />)}
                     </tbody>
                   </table>
                 </div>
@@ -736,7 +745,6 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
                    <FormGrid title="Informasi Narahubung">
                      <Inp label="Nama Penanggung Jawab" val={form.kontakNama || ""} onChange={v=>setForm(f=>({...f,kontakNama:v}))} />
                      <Inp label="Nomer Telp / WA" val={form.kontakHP || ""} onChange={v=>setForm(f=>({...f,kontakHP:v}))} />
-                     <Inp label="Email" type="email" full val={form.kontakEmail || ""} onChange={v=>setForm(f=>({...f,kontakEmail:v}))} />
                    </FormGrid>
 
                    <div className="flex gap-4 pt-4">
@@ -969,7 +977,7 @@ function EventRow({ e, onClick, canEdit, handleEdit, setDelConfirm }: { e: Event
         <div className="text-xs text-slate-500 font-medium">{e.kategori}</div>
       </td>
       <td className="px-6 py-5">
-        <div className="text-xs font-mono text-slate-600">{e.tanggalMulai}</div>
+        <div className="text-xs font-sans text-slate-600">{e.tanggalMulai}</div>
       </td>
       <td className="px-8 py-5 text-right" onClick={ev=>ev.stopPropagation()}>
         <div className="flex justify-end gap-2 text-slate-400">
