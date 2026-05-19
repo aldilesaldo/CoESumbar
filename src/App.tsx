@@ -116,28 +116,34 @@ const STORAGE_KEY  = "coe_sumbar_v2_events";
 const SESSION_KEY  = "coe_sumbar_session";
 
 // ── API HELPERS (Proxy through Server) ───────────────────────────────
-async function sheetSaveEvent(event: EventData) {
+async function sheetSaveEvent(event: EventData): Promise<{success: boolean, detail?: string}> {
   try {
     const res = await fetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "save", event }),
     });
-    return res.ok;
-  } catch(e) { 
+    if (res.ok) return { success: true };
+    const data = await res.json();
+    return { success: false, detail: data.detail || data.error || `Status ${res.status}` };
+  } catch(e: any) { 
     console.warn("Sheet save failed:", e); 
-    return false;
+    return { success: false, detail: e.message };
   }
 }
 
 async function sheetDeleteEvent(id: number) {
   try {
-    await fetch("/api/events", {
+    const res = await fetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-  } catch(e) { console.warn("Sheet delete failed:", e); }
+    return res.ok;
+  } catch(e) { 
+    console.warn("Sheet delete failed:", e); 
+    return false;
+  }
 }
 
 async function sheetGetAll(): Promise<EventData[] | null> {
@@ -358,7 +364,9 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
         if (!Array.isArray(jsonData)) throw new Error("Format file tidak valid.");
         if (window.confirm(`${jsonData.length} event ditemukan. Lanjutkan restorasi?`)) {
           setEvents(jsonData);
-          jsonData.forEach((ev: any) => sheetSaveEvent(ev));
+          for (const ev of jsonData) {
+            await sheetSaveEvent(ev);
+          }
           showToast("Restorasi data berhasil! ✓");
         }
       } catch (err) { alert("Gagal mengimpor: format file tidak sesuai."); }
@@ -443,23 +451,23 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
     setSheetLoading(true);
     if (editId) {
       const updated = {...finalForm, id:editId} as EventData;
-      const success = await sheetSaveEvent(updated);
-      if (success) {
+      const res = await sheetSaveEvent(updated);
+      if (res.success) {
         setEvents(ev=>ev.map(e=>e.id===editId?updated:e));
         showToast("Event diperbarui. ✓");
         setView("list"); setForm(initialForm); setEditId(null);
       } else {
-        showToast("Gagal menyimpan ke Google Sheets.", "error");
+        showToast(`Gagal menyimpan: ${res.detail || "Kesalahan Sheet"}`, "error");
       }
     } else {
       const newEvent = {...finalForm, id:Date.now(), createdAt:new Date().toISOString()} as EventData;
-      const success = await sheetSaveEvent(newEvent);
-      if (success) {
+      const res = await sheetSaveEvent(newEvent);
+      if (res.success) {
         setEvents(ev=>[...ev, newEvent]);
         showToast("Event ditambahkan. ✓");
         setView("list"); setForm(initialForm); setEditId(null);
       } else {
-        showToast("Gagal menyimpan ke Google Sheets.", "error");
+        showToast(`Gagal menyimpan: ${res.detail || "Kesalahan Sheet"}`, "error");
       }
     }
     setSheetLoading(false);
@@ -471,15 +479,17 @@ function MainApp({ user, onLogout }: { user: any; onLogout: () => void }) {
 
   const handleDelete = async (id: any) => {
     if (!id) return;
-    try {
+    setSheetLoading(true);
+    const success = await sheetDeleteEvent(Number(id));
+    if (success) {
       setEvents(ev=>ev.filter(e=>String(e.id)!==String(id)));
-      await sheetDeleteEvent(Number(id));
       setDelConfirm(null); 
       showToast("Event berhasil dihapus. ✓");
       if (view==="detail") setView("list");
-    } catch (err) {
-      showToast("Gagal menghapus event.", "error");
+    } else {
+      showToast("Gagal menghapus event dari server.", "error");
     }
+    setSheetLoading(false);
   };
 
   const handleAjukan = async (id: any) => {

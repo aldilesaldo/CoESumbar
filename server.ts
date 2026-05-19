@@ -49,10 +49,15 @@ async function startServer() {
   // Proxy for Google Sheets POST
   app.post("/api/events", async (req, res) => {
     try {
-      const response = await fetch(SHEET_URL, {
+      const action = req.body.action || "save";
+      const targetUrl = `${SHEET_URL}${SHEET_URL.includes("?") ? "&" : "?"}action=${action}`;
+      
+      console.log(`Saving to Google Sheets (${action}):`, targetUrl);
+      const response = await fetch(targetUrl, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
         body: JSON.stringify(req.body),
@@ -62,14 +67,22 @@ async function startServer() {
       const text = await response.text();
       
       if (!response.ok) {
-        console.error(`Google Sheets POST responded with status ${response.status}. Body:`, text.substring(0, 200));
-        return res.status(response.status).json({ error: "Failed to save to Google Sheets" });
+        console.error(`Google Sheets POST failed. Status: ${response.status}, Body: ${text.substring(0, 500)}`);
+        return res.status(response.status).json({ 
+          error: "Failed to save to Google Sheets", 
+          status: response.status,
+          detail: text.substring(0, 200)
+        });
       }
 
+      console.log("Google Sheets POST success:", text.substring(0, 100));
       res.json({ status: "ok", detail: text.substring(0, 500) });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving to sheets:", error);
-      res.status(500).json({ error: "Failed to save event to Google Sheets" });
+      res.status(500).json({ 
+        error: "Failed to save event to Google Sheets", 
+        detail: error.message 
+      });
     }
   });
 
